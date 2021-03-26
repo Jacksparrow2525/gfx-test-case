@@ -242,5 +242,4 @@ include_directories(${GFX_INCLUDE_FILES})
 
 add_subdirectory(engine/base)
 add_subdirectory(engine/renderer)
-add_subdirectory(engine/bindings)
 add_subdirectory(src)

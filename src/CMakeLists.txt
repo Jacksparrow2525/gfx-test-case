@@ -76,7 +76,6 @@ set(ENGINE_BASE_LIBS
     GFXAgent
     GFXValidator
     FrameGraph
-    ScriptEngine
 )
 
 if(WIN32)
