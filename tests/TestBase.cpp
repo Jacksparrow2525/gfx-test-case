@@ -49,8 +49,8 @@ gfx::Framebuffer *TestBaseI::fbo                    = nullptr;
 gfx::RenderPass * TestBaseI::renderPass             = nullptr;
 
 std::vector<TestBaseI::createFunc> TestBaseI::tests = {
-    SubpassTest::create,
-    DeferredTest::create,
+//    SubpassTest::create,
+//    DeferredTest::create,
     ComputeTest::create,
     ScriptTest::create,
     FrameGraphTest::create,
@@ -88,7 +88,7 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 
 #if defined(CC_DEBUG) && (CC_DEBUG > 0)
         // Enable debugger here
-        jsb_enable_debugger("0.0.0.0", 6086, false);
+        jsb_enable_debugger("0.0.0.0", 6080, false);
 #endif
 
         se->setExceptionCallback([](const char *location, const char *message, const char *stack) {
