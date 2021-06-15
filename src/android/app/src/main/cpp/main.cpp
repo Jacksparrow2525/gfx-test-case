@@ -8,6 +8,9 @@
 #include <cocos/bindings/event/EventDispatcher.h>
 #include <time.h>
 
+
+#include "android/jni/jnihelper.h"
+
 #define LOG_TAG   "main"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 using namespace cc;
@@ -101,6 +104,9 @@ void android_main(struct android_app* state) {
     savedState.app      = state;
     static_cast<FileUtilsAndroid*>(FileUtils::getInstance())->setassetmanager(state->activity->assetManager);
     double lastTime = now();
+
+    // JAMIE: Get JVM and activity for OpenXR setup
+    JniHelper::SetJVMandActivity(state->activity->vm, state->activity->clazz, state);
 
     while (1) {
         // Read all pending events.

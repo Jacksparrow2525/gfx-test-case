@@ -30,7 +30,25 @@
 
 #define DEFAULT_MATRIX_MATH
 
-//#undef CC_USE_VULKAN
+
+#define XR_USE_PLATFORM_ANDROID // Force use Android platform
+
+#include "EGL/egl.h" // For OpenXR
+#define XR_USE_GRAPHICS_API_OPENGL_ES // USE GLES
+
+#ifdef XR_USE_PLATFORM_ANDROID
+#define XR_KHR_LOADER_INIT_SUPPORT
+#endif
+
+//#define XR_EXTENSION_PROTOTYPES // JAMIE
+
+#include "android/jni/JniHelper.h"
+
+#include "openxr/openxr.h"
+#include "openxr/openxr_platform.h"
+#include "openxr/openxr_platform_defines.h"
+
+#undef CC_USE_VULKAN
 //#undef CC_USE_GLES3
 //#undef CC_USE_GLES2
 #include "renderer/GFXDeviceManager.h"
@@ -51,19 +69,19 @@ gfx::RenderPass * TestBaseI::renderPass             = nullptr;
 std::vector<TestBaseI::createFunc> TestBaseI::tests = {
 //    SubpassTest::create,
 //    DeferredTest::create,
-    ComputeTest::create,
-    ScriptTest::create,
-    FrameGraphTest::create,
-    StressTest::create,
-    ClearScreen::create,
-    BasicTriangle::create,
+ //   ComputeTest::create,
+ //   ScriptTest::create,
+ //   FrameGraphTest::create,
+ //   StressTest::create,
+ //   ClearScreen::create,
+ //   BasicTriangle::create,
     DepthTexture::create,
-    BlendTest::create,
-    ParticleTest::create,
+ //   BlendTest::create,
+ //   ParticleTest::create,
 // Need to fix lib jpeg on iOS
 #if CC_PLATFORM != CC_PLATFORM_MAC_IOS
-    BasicTexture::create,
-    StencilTest::create,
+ //   BasicTexture::create,
+ //   StencilTest::create,
 #endif // CC_PLATFORM != CC_PLATFORM_MAC_IOS
 };
 
@@ -76,6 +94,14 @@ std::unordered_map<uint, gfx::TextureBarrier *> TestBaseI::textureBarrierMap;
 framegraph::FrameGraph TestBaseI::fg;
 framegraph::Texture    TestBaseI::fgBackBuffer;
 framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
+
+#include <strings.h>
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 TestBaseI::TestBaseI(const WindowInfo &info) {
     if (!device) {
@@ -148,6 +174,94 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 
     hostThread.prevTime   = std::chrono::steady_clock::now();
     deviceThread.prevTime = std::chrono::steady_clock::now();
+
+#if 1
+
+    typedef XrResult (XRAPI_PTR *PFN_xrInitializeLoaderKHR)(const XrLoaderInitInfoBaseHeaderKHR* loaderInitInfo);
+
+    // Init OpenXR
+    PFN_xrInitializeLoaderKHR initializeLoader = nullptr;
+    if (XR_SUCCEEDED(
+            xrGetInstanceProcAddr(XR_NULL_HANDLE, "xrInitializeLoaderKHR", (PFN_xrVoidFunction*)(&initializeLoader)))) {
+        XrLoaderInitInfoAndroidKHR loaderInitInfoAndroid;
+        memset(&loaderInitInfoAndroid, 0, sizeof(loaderInitInfoAndroid));
+        loaderInitInfoAndroid.type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR;
+        loaderInitInfoAndroid.next = NULL;
+        loaderInitInfoAndroid.applicationVM = JniHelper::getJavaVM();
+        loaderInitInfoAndroid.applicationContext = JniHelper::getActivity();
+
+        // Do loader init
+        initializeLoader((XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
+
+
+        // Extensions to enable
+        std::vector<const char*> extensions;
+        extensions.push_back(XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME);
+
+        // Create XrInstance
+        XrInstance inst;
+        XrInstanceCreateInfo createInfo{XR_TYPE_INSTANCE_CREATE_INFO};
+        createInfo.next = NULL;
+        createInfo.createFlags = 0;
+        createInfo.enabledExtensionCount = (uint32_t)extensions.size();
+        createInfo.enabledExtensionNames = extensions.data();
+
+        strcpy(createInfo.applicationInfo.applicationName, "HelloXR");
+        createInfo.applicationInfo.apiVersion = XR_CURRENT_API_VERSION;
+        xrCreateInstance(&createInfo, &inst);
+
+        XrInstanceProperties instanceProperties{XR_TYPE_INSTANCE_PROPERTIES};
+        xrGetInstanceProperties(inst, &instanceProperties);
+
+        // Init system
+        XrSystemId sysId{XR_NULL_SYSTEM_ID};
+        XrSystemGetInfo systemInfo{XR_TYPE_SYSTEM_GET_INFO};
+        systemInfo.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+        XrResult res = xrGetSystem(inst, &systemInfo, &sysId);
+
+#if 1
+        PFN_xrGetOpenGLESGraphicsRequirementsKHR pfnGetOpenGLESGraphicsRequirementsKHR = nullptr;
+        xrGetInstanceProcAddr(inst, "xrGetOpenGLESGraphicsRequirementsKHR",
+                                          reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetOpenGLESGraphicsRequirementsKHR));
+
+        XrGraphicsRequirementsOpenGLESKHR graphicsRequirements{XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
+        pfnGetOpenGLESGraphicsRequirementsKHR(inst, sysId, &graphicsRequirements);
+
+        int foo = 0;
+
+#endif
+
+#if 1 // Check views
+        uint32_t viewConfigTypeCount;
+        xrEnumerateViewConfigurations(inst, sysId, 0, &viewConfigTypeCount, nullptr);
+        std::vector<XrViewConfigurationType> viewConfigTypes(viewConfigTypeCount);
+        xrEnumerateViewConfigurations(inst, sysId, viewConfigTypeCount, &viewConfigTypeCount,
+                                                  viewConfigTypes.data());
+        assert((uint32_t)viewConfigTypes.size() == viewConfigTypeCount);
+
+        XrViewConfigurationProperties viewConfigProperties{XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
+        xrGetViewConfigurationProperties(inst, sysId, viewConfigTypes[0], &viewConfigProperties);
+        uint32_t viewCount;
+        xrEnumerateViewConfigurationViews(inst, sysId, viewConfigTypes[0], 0, &viewCount, nullptr);
+
+        if (viewCount > 0) {
+            std::vector<XrViewConfigurationView> views(viewCount,
+                                                       {XR_TYPE_VIEW_CONFIGURATION_VIEW});
+            xrEnumerateViewConfigurationViews(inst, sysId, viewConfigTypes[0], viewCount,
+                                              &viewCount, views.data());
+            int yyy = 900;
+        }
+#endif
+        XrGraphicsBindingOpenGLESAndroidKHR m_graphicsBinding{XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR};
+
+
+        struct android_app* app = JniHelper::getAPP();
+
+        int uuu = -20;
+
+
+    }
+#endif
 }
 
 void TestBaseI::tickScript() {
@@ -454,4 +568,4 @@ gfx::TextureBarrier *TestBaseI::getTextureBarrier(const gfx::TextureBarrierInfo 
     return textureBarrierMap[hash];
 }
 
-} // namespace cc
+} // namespac   
