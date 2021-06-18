@@ -16,6 +16,7 @@ set(GFX_TESTCASE_HEADER
     ${COCOS_ROOT_PATH}/tests/DeferredTest.h
     ${COCOS_ROOT_PATH}/tests/SubpassTest.h
     ${COCOS_ROOT_PATH}/tests/tiny_obj_loader.h
+    ${COCOS_ROOT_PATH}/tests/common/xr_linear.h
 )
 
 set(GFX_TESTCASE_SOURCE
