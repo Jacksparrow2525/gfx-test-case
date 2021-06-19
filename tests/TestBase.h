@@ -35,7 +35,8 @@ struct Framebuffer {
     }
 };
 
-
+    void PollEvents(bool* exitRenderLoop, bool* requestRestart);
+    void RenderFrame();
 
 struct StandardShaderSource {
     String vert;
@@ -139,6 +140,8 @@ public:
     }
     static void setWindowInfo(const WindowInfo &info) { windowInfo = info; }
     static void spacePressed() { test->onSpacePressed(); }
+
+    static bool setupOpenXr();
 
     static void nextTest(bool backward = false);
     static void destroyGlobal();

@@ -11,6 +11,8 @@
 
 #include "android/jni/jnihelper.h"
 
+#include "cocos/renderer/gfx-gles3/gles3context.h"
+
 #define LOG_TAG   "main"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 using namespace cc;
@@ -95,6 +97,10 @@ int32_t engineHandleInput(struct android_app* app, AInputEvent* event) {
 }
 } // namespace
 
+
+extern bool g_sessionRunning;
+
+int cty = 0;
 void android_main(struct android_app* state) {
     struct SavedState savedState;
     memset(&savedState, 0, sizeof(savedState));
@@ -107,6 +113,11 @@ void android_main(struct android_app* state) {
 
     // JAMIE: Get JVM and activity for OpenXR setup
     JniHelper::SetJVMandActivity(state->activity->vm, state->activity->clazz, state);
+
+    bool requestRestart = false;
+    bool exitRenderLoop = false;
+
+    bool bReady = false;
 
     while (1) {
         // Read all pending events.
@@ -134,6 +145,20 @@ void android_main(struct android_app* state) {
         if (savedState.animating) {
             TestBaseI::update();
             lastTime = time;
+        }
+
+        if (savedState.animating) {
+            bReady = true;
+        }
+
+        if(bReady && (++cty >= 60) && true) {
+            TestBaseI::setupOpenXr();
+            PollEvents(&exitRenderLoop, &requestRestart);
+            if (!g_sessionRunning) {
+                continue;
+            }
+
+            RenderFrame();
         }
     }
 }

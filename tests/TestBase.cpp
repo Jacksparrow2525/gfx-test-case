@@ -53,12 +53,15 @@
 #include "openxr/openxr_platform_defines.h"
 
 #undef CC_USE_VULKAN
-//#undef CC_USE_GLES3
+#undef CC_USE_GLES3
 //#undef CC_USE_GLES2
 #include "renderer/GFXDeviceManager.h"
 
 #include <android_native_app_glue.h>
 #include <jni.h>
+bool g_sessionRunning{false};
+
+
 
 namespace cc {
 
@@ -119,7 +122,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
     XrSpace g_appSpace{XR_NULL_HANDLE};
     XrEventDataBuffer g_eventDataBuffer{};
     XrSessionState g_sessionState{XR_SESSION_STATE_UNKNOWN};
-    bool g_sessionRunning{false};
+
     std::vector<XrViewConfigurationView> g_configViews;
     struct Swapchain {
         XrSwapchain handle;
@@ -556,6 +559,8 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
     void InitializeResources() {
         glGenFramebuffers(1, &g_swapchainFramebuffer);
 
+        EGLContext test = eglGetCurrentContext();
+
         GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertexShader, 1, &VertexShaderGlsl, nullptr);
         glCompileShader(vertexShader);
@@ -739,7 +744,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         return true;
     }
 
-    static void RenderFrame()
+    void RenderFrame()
     {
         XrFrameWaitInfo frameWaitInfo{XR_TYPE_FRAME_WAIT_INFO};
         XrFrameState frameState{XR_TYPE_FRAME_STATE};
@@ -876,7 +881,7 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 
         device = gfx::DeviceManager::create(deviceInfo);
     }
-#if 0
+
     if (!renderPass) {
         gfx::RenderPassInfo  renderPassInfo;
         gfx::ColorAttachment colorAttachment;
@@ -902,10 +907,36 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 
     hostThread.prevTime   = std::chrono::steady_clock::now();
     deviceThread.prevTime = std::chrono::steady_clock::now();
-#endif
+    deviceThread.prevTime = std::chrono::steady_clock::now();
+}
 
+void TestBaseI::tickScript() {
+    EventDispatcher::dispatchTickEvent(0.F);
+}
+
+void TestBaseI::destroyGlobal() {
+    CC_SAFE_DESTROY(test)
+    CC_SAFE_DESTROY(fbo)
+    CC_SAFE_DESTROY(renderPass)
+    framegraph::FrameGraph::gc(0);
+
+    for (auto textureBarrier : textureBarrierMap) {
+        CC_SAFE_DELETE(textureBarrier.second)
+    }
+    textureBarrierMap.clear();
+
+    for (auto globalBarrier : globalBarrierMap) {
+        CC_SAFE_DELETE(globalBarrier.second)
+    }
+    globalBarrierMap.clear();
+
+    se::ScriptEngine::getInstance()->cleanup();
+
+    CC_SAFE_DESTROY(device)
+}
+
+bool TestBaseI::setupOpenXr() {
 #if 1
-
     typedef XrResult (XRAPI_PTR *PFN_xrInitializeLoaderKHR)(const XrLoaderInitInfoBaseHeaderKHR* loaderInitInfo);
 
     // Init OpenXR
@@ -920,15 +951,21 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
         loaderInitInfoAndroid.applicationContext = JniHelper::getActivity();
 
         // Do loader init
-        initializeLoader((XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
+        initializeLoader((const XrLoaderInitInfoBaseHeaderKHR*)&loaderInitInfoAndroid);
 
         // Extensions to enable
         std::vector<const char*> extensions;
         extensions.push_back(XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME);
+        extensions.push_back(XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME);
+
+        XrInstanceCreateInfoAndroidKHR createInfoAndroid{XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR };
+        createInfoAndroid.next = NULL;
+        createInfoAndroid.applicationActivity = JniHelper::getActivity();
+        createInfoAndroid.applicationVM = JniHelper::getJavaVM();
 
         // Create XrInstance
-        XrInstanceCreateInfo createInfo{XR_TYPE_INSTANCE_CREATE_INFO};
-        createInfo.next = NULL;
+        XrInstanceCreateInfo createInfo{XR_TYPE_INSTANCE_CREATE_INFO };
+        createInfo.next = &createInfoAndroid;
         createInfo.createFlags = 0;
         createInfo.enabledExtensionCount = (uint32_t)extensions.size();
         createInfo.enabledExtensionNames = extensions.data();
@@ -948,7 +985,7 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 #if 1
         PFN_xrGetOpenGLESGraphicsRequirementsKHR pfnGetOpenGLESGraphicsRequirementsKHR = nullptr;
         xrGetInstanceProcAddr(g_inst, "xrGetOpenGLESGraphicsRequirementsKHR",
-                                          reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetOpenGLESGraphicsRequirementsKHR));
+                              reinterpret_cast<PFN_xrVoidFunction*>(&pfnGetOpenGLESGraphicsRequirementsKHR));
 
         XrGraphicsRequirementsOpenGLESKHR graphicsRequirements{XR_TYPE_GRAPHICS_REQUIREMENTS_OPENGL_ES_KHR};
         pfnGetOpenGLESGraphicsRequirementsKHR(g_inst, g_sysId, &graphicsRequirements);
@@ -962,7 +999,7 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
         xrEnumerateViewConfigurations(g_inst, g_sysId, 0, &viewConfigTypeCount, nullptr);
         std::vector<XrViewConfigurationType> viewConfigTypes(viewConfigTypeCount);
         xrEnumerateViewConfigurations(g_inst, g_sysId, viewConfigTypeCount, &viewConfigTypeCount,
-                                                  viewConfigTypes.data());
+                                      viewConfigTypes.data());
         assert((uint32_t)viewConfigTypes.size() == viewConfigTypeCount);
 
         XrViewConfigurationProperties viewConfigProperties{XR_TYPE_VIEW_CONFIGURATION_PROPERTIES};
@@ -1021,16 +1058,19 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 
         CreateSwapchains();
 
-        JNIEnv* Env;
-        app->activity->vm->AttachCurrentThread(&Env, nullptr);
+        //JNIEnv* Env;
+        //app->activity->vm->AttachCurrentThread(&Env, nullptr);
 
-        AndroidAppState appState = {};
+        //AndroidAppState appState = {};
 
-        app->userData = &appState;
-        app->onAppCmd = app_handle_cmd;
+        //app->userData = &appState;
+        //app->onAppCmd = app_handle_cmd;
 
-        bool requestRestart = false;
-        bool exitRenderLoop = false;
+        //bool requestRestart = false;
+        //bool exitRenderLoop = false;
+
+
+        return true;
 
 #if 0
         // Poll events for session
@@ -1063,7 +1103,7 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
         }
 
         int kkk = 0;
-#else
+#elif 0
         bool quitKeyPressed = false;
         while (!quitKeyPressed) {
             bool exitRenderLoop = false;
@@ -1082,31 +1122,6 @@ TestBaseI::TestBaseI(const WindowInfo &info) {
 #endif
     }
 #endif
-}
-
-void TestBaseI::tickScript() {
-    EventDispatcher::dispatchTickEvent(0.F);
-}
-
-void TestBaseI::destroyGlobal() {
-    CC_SAFE_DESTROY(test)
-    CC_SAFE_DESTROY(fbo)
-    CC_SAFE_DESTROY(renderPass)
-    framegraph::FrameGraph::gc(0);
-
-    for (auto textureBarrier : textureBarrierMap) {
-        CC_SAFE_DELETE(textureBarrier.second)
-    }
-    textureBarrierMap.clear();
-
-    for (auto globalBarrier : globalBarrierMap) {
-        CC_SAFE_DELETE(globalBarrier.second)
-    }
-    globalBarrierMap.clear();
-
-    se::ScriptEngine::getInstance()->cleanup();
-
-    CC_SAFE_DESTROY(device)
 }
 
 void TestBaseI::nextTest(bool backward) {
@@ -1130,6 +1145,7 @@ void TestBaseI::onTouchEnd() {
 }
 
 void TestBaseI::update() {
+
     if (nextDirection) {
         CC_SAFE_DESTROY(test)
         if (nextDirection < 0) curTestIndex += tests.size();
