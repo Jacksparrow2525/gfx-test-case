@@ -620,12 +620,12 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glFrontFace(GL_CW);
         glCullFace(GL_BACK);
         glEnable(GL_CULL_FACE);
-        glEnable(GL_DEPTH_TEST);
+     //   glEnable(GL_DEPTH_TEST);
 
-        const uint32_t depthTexture = GetDepthTexture(colorTexture, layerView.subImage.imageRect.extent.width, layerView.subImage.imageRect.extent.height);
+      //  const uint32_t depthTexture = GetDepthTexture(colorTexture, layerView.subImage.imageRect.extent.width, layerView.subImage.imageRect.extent.height);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+  //      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
         // Clear swapchain and depth buffer.
         float DarkSlateGray[] = {0.184313729f, 0.309803933f, 0.309803933f, 1.0f};
@@ -697,6 +697,9 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         // For each locatable space that we want to visualize, render a 25cm cube.
         std::vector<Cube> cubes;
 
+        float height = 0.0f;
+        static float rotations[3] = {0};
+        int index = 0;
         for (XrSpace visualizedSpace : g_visualizedSpaces) {
             XrSpaceLocation spaceLocation{XR_TYPE_SPACE_LOCATION};
             res = xrLocateSpace(visualizedSpace, g_appSpace, predictedDisplayTime, &spaceLocation);
@@ -704,7 +707,18 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
             if (XR_UNQUALIFIED_SUCCESS(res)) {
                 if ((spaceLocation.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0 &&
                     (spaceLocation.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0) {
-                    cubes.push_back(Cube{spaceLocation.pose, {0.25f, 0.25f, 0.25f}});
+
+                    XrPosef pose = Math::Pose::RotateCCWAboutYAxis(rotations[index], {spaceLocation.pose.position.x, spaceLocation.pose.position.y+height, spaceLocation.pose.position.z});
+                    cubes.push_back(Cube{pose, {0.3f, 0.3f, 0.3f}});
+                    height+=0.32f;
+
+                    float speed = 0.0f;
+                    switch(index){
+                        case 0: speed = 0.01f; break;
+                        case 1: speed = 0.002f; break;
+                        case 2: speed = -0.02f; break;
+                    }
+                    rotations[index++]+=speed;
                 }
             }
         }
@@ -733,7 +747,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
             const XrSwapchainImageBaseHeader* const swapchainImage = g_swapchainImages[viewSwapchain.handle][swapchainImageIndex];
 
             // GLES Render
-            //RenderView(projectionLayerViews[i], swapchainImage, g_colorSwapchainFormat, cubes);
+            RenderView(projectionLayerViews[i], swapchainImage, g_colorSwapchainFormat, cubes);
 
             XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             xrReleaseSwapchainImage(viewSwapchain.handle, &releaseInfo);
@@ -1039,8 +1053,8 @@ bool TestBaseI::setupOpenXr() {
 #endif
 
         {
-            std::string visualizedSpaces[] = {"ViewFront",        "Local", "Stage", "StageLeft", "StageRight", "StageLeftRotated",
-                                              "StageRightRotated"};
+            std::string visualizedSpaces[] = {"Stage", "Stage", "Stage"};//, "Stage", "StageLeft", "StageRight", "StageLeftRotated",
+                                              //"StageRightRotated"};
 
             for (const auto& visualizedSpace : visualizedSpaces) {
                 XrReferenceSpaceCreateInfo referenceSpaceCreateInfo = GetXrReferenceSpaceCreateInfo(visualizedSpace);
