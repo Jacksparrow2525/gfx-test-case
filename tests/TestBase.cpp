@@ -528,19 +528,20 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         return sessionStates[index];
     }
 
-    static uint32_t GetDepthTexture(uint32_t colorTexture) {
+    static uint32_t GetDepthTexture(uint32_t colorTexture, uint32_t width, uint32_t height) {
         // If a depth-stencil view has already been created for this back-buffer, use it.
         auto depthBufferIt = g_colorToDepthMap.find(colorTexture);
         if (depthBufferIt != g_colorToDepthMap.end()) {
             return depthBufferIt->second;
         }
-
+#if 0
         // This back-buffer has no corresponding depth-stencil texture, so create one with matching dimensions.
         GLint width;
         GLint height;
         glBindTexture(GL_TEXTURE_2D, colorTexture);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+#endif
 
         uint32_t depthTexture;
         glGenTextures(1, &depthTexture);
@@ -593,8 +594,8 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_cubeIndexBuffer);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_cubeIndices), Geometry::c_cubeIndices, GL_STATIC_DRAW);
 
-        glGenVertexArrays(1, &g_vao);
-        glBindVertexArray(g_vao);
+        glGenVertexArraysOES(1, &g_vao);
+        glBindVertexArrayOES(g_vao);
         glEnableVertexAttribArray(g_vertexAttribCoords);
         glEnableVertexAttribArray(g_vertexAttribColor);
         glBindBuffer(GL_ARRAY_BUFFER, g_cubeVertexBuffer);
@@ -621,7 +622,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
 
-        const uint32_t depthTexture = GetDepthTexture(colorTexture);
+        const uint32_t depthTexture = GetDepthTexture(colorTexture, layerView.subImage.imageRect.extent.width, layerView.subImage.imageRect.extent.height);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
@@ -647,7 +648,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         XrMatrix4x4f_Multiply(&vp, &proj, &view);
 
         // Set cube primitive data.
-        glBindVertexArray(g_vao);
+        glBindVertexArrayOES(g_vao);
 
         // Render each cube
         for (const Cube& cube : cubes) {
@@ -662,7 +663,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cubeIndices)), GL_UNSIGNED_SHORT, nullptr);
         }
 
-        glBindVertexArray(0);
+        glBindVertexArrayOES(0);
         glUseProgram(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -732,7 +733,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
             const XrSwapchainImageBaseHeader* const swapchainImage = g_swapchainImages[viewSwapchain.handle][swapchainImageIndex];
 
             // GLES Render
-            RenderView(projectionLayerViews[i], swapchainImage, g_colorSwapchainFormat, cubes);
+            //RenderView(projectionLayerViews[i], swapchainImage, g_colorSwapchainFormat, cubes);
 
             XrSwapchainImageReleaseInfo releaseInfo{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
             xrReleaseSwapchainImage(viewSwapchain.handle, &releaseInfo);

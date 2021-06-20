@@ -100,7 +100,6 @@ int32_t engineHandleInput(struct android_app* app, AInputEvent* event) {
 
 extern bool g_sessionRunning;
 
-int cty = 0;
 void android_main(struct android_app* state) {
     struct SavedState savedState;
     memset(&savedState, 0, sizeof(savedState));
@@ -116,8 +115,7 @@ void android_main(struct android_app* state) {
 
     bool requestRestart = false;
     bool exitRenderLoop = false;
-
-    bool bReady = false;
+    bool openXrInitDone = false;
 
     while (1) {
         // Read all pending events.
@@ -145,14 +143,14 @@ void android_main(struct android_app* state) {
         if (savedState.animating) {
             TestBaseI::update();
             lastTime = time;
-        }
 
-        if (savedState.animating) {
-            bReady = true;
-        }
+            if(!openXrInitDone)
+            {
+                TestBaseI::setupOpenXr();
+                openXrInitDone = true;
+            }
 
-        if(bReady && (++cty >= 60) && true) {
-            TestBaseI::setupOpenXr();
+            // OpenXR event/state dispatcher
             PollEvents(&exitRenderLoop, &requestRestart);
             if (!g_sessionRunning) {
                 continue;
