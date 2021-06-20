@@ -936,6 +936,11 @@ void TestBaseI::destroyGlobal() {
 }
 
 bool TestBaseI::setupOpenXr() {
+
+    gfx::GLES3Context *context = (gfx::GLES3Context*)device->getContext();
+
+    assert( eglGetCurrentDisplay() != NULL);
+
 #if 1
     typedef XrResult (XRAPI_PTR *PFN_xrInitializeLoaderKHR)(const XrLoaderInitInfoBaseHeaderKHR* loaderInitInfo);
 
@@ -1020,7 +1025,6 @@ bool TestBaseI::setupOpenXr() {
 #if 1 // Setup bindings required to create xrSession object
 
         // Get GFX layer information
-        gfx::GLES3Context *context = (gfx::GLES3Context*)device->getContext();
         g_graphicsBinding.display = context->eglDisplay();
         g_graphicsBinding.config = context->eglConfig();
         g_graphicsBinding.context = context->eglContext();
