@@ -53,8 +53,8 @@
 #include "openxr/openxr_platform_defines.h"
 
 #undef CC_USE_VULKAN
-#undef CC_USE_GLES3
-//#undef CC_USE_GLES2
+//#undef CC_USE_GLES3
+#undef CC_USE_GLES2
 #include "renderer/GFXDeviceManager.h"
 
 #include <android_native_app_glue.h>
@@ -528,19 +528,19 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         return sessionStates[index];
     }
 
-    static uint32_t GetDepthTexture(uint32_t colorTexture, uint32_t width, uint32_t height) {
+    static uint32_t GetDepthTexture(uint32_t colorTexture) {
         // If a depth-stencil view has already been created for this back-buffer, use it.
         auto depthBufferIt = g_colorToDepthMap.find(colorTexture);
         if (depthBufferIt != g_colorToDepthMap.end()) {
             return depthBufferIt->second;
         }
-#if 0
+#if 1
         // This back-buffer has no corresponding depth-stencil texture, so create one with matching dimensions.
-        GLint width;
-        GLint height;
+        GLint w;
+        GLint h;
         glBindTexture(GL_TEXTURE_2D, colorTexture);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
 #endif
 
         uint32_t depthTexture;
@@ -550,7 +550,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
 
         g_colorToDepthMap.insert(std::make_pair(colorTexture, depthTexture));
 
@@ -594,8 +594,8 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_cubeIndexBuffer);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Geometry::c_cubeIndices), Geometry::c_cubeIndices, GL_STATIC_DRAW);
 
-        glGenVertexArraysOES(1, &g_vao);
-        glBindVertexArrayOES(g_vao);
+        glGenVertexArrays(1, &g_vao);
+        glBindVertexArray(g_vao);
         glEnableVertexAttribArray(g_vertexAttribCoords);
         glEnableVertexAttribArray(g_vertexAttribColor);
         glBindBuffer(GL_ARRAY_BUFFER, g_cubeVertexBuffer);
@@ -620,12 +620,12 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         glFrontFace(GL_CW);
         glCullFace(GL_BACK);
         glEnable(GL_CULL_FACE);
-     //   glEnable(GL_DEPTH_TEST);
+        //glEnable(GL_DEPTH_TEST);
 
-      //  const uint32_t depthTexture = GetDepthTexture(colorTexture, layerView.subImage.imageRect.extent.width, layerView.subImage.imageRect.extent.height);
+        const uint32_t depthTexture = GetDepthTexture(colorTexture);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-  //      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
 
         // Clear swapchain and depth buffer.
         float DarkSlateGray[] = {0.184313729f, 0.309803933f, 0.309803933f, 1.0f};
@@ -648,7 +648,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
         XrMatrix4x4f_Multiply(&vp, &proj, &view);
 
         // Set cube primitive data.
-        glBindVertexArrayOES(g_vao);
+        glBindVertexArray(g_vao);
 
         // Render each cube
         for (const Cube& cube : cubes) {
@@ -663,7 +663,7 @@ framegraph::Texture    TestBaseI::fgDepthStencilBackBuffer;
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(ArraySize(Geometry::c_cubeIndices)), GL_UNSIGNED_SHORT, nullptr);
         }
 
-        glBindVertexArrayOES(0);
+        glBindVertexArray(0);
         glUseProgram(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
